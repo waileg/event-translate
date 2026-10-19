@@ -3,13 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { LANGS, translateBatch, translatorAvailable } from "@/lib/translate";
+import { LANGS, translatorAvailable } from "@/lib/translate";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
-
-interface SpeechRecognitionLike {
-  start(): void;
-  stop(): void;
-}
+import { useSentenceTranslator } from "@/hooks/useSentenceTranslator";
 
 export default function Speaker() {
   const [sourceLang, setSourceLang] = useState<string>("es");
@@ -17,15 +13,14 @@ export default function Speaker() {
   const [qrUrl, setQrUrl] = useState<string>("");
   const [viewerUrl, setViewerUrl] = useState<string>("");
   const [listening, setListening] = useState(false);
-  const [langs, setLangs] = useState<Set<string>>(new Set());
-  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [langs, setLangs] = useState<string[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const bcRef = useRef<BroadcastChannel | null>(null);
-  const lastTranslatedCount = useRef<Record<string, number>>({});
 
   const langSpeech = LANGS.find((l) => l.value === sourceLang)?.speech || "es-ES";
   const speech = useSpeechRecognition(langSpeech, listening);
   const fullText = (speech.base + " " + speech.interim).trim();
+  const translations = useSentenceTranslator(speech.sentences, sourceLang, langs);
 
   async function createEvent() {
     const r = await fetch("/api/events", {
@@ -43,52 +38,30 @@ export default function Speaker() {
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
       if (msg.type === "lang") {
-        setLangs((prev) => new Set(prev).add(msg.lang));
+        setLangs((prev) => (prev.includes(msg.lang) ? prev : [...prev, msg.lang]));
       }
     };
   }
 
-  // Traduccion por tandas: solo frases nuevas
+  // Difusion del texto original (WebSocket + proyector)
   useEffect(() => {
-    if (!eventCode || !listening) return;
-    const sentences = speech.sentences;
-    if (!sentences.length) return;
-    let cancelled = false;
-    (async () => {
-      for (const lang of langs) {
-        const prev = lastTranslatedCount.current[lang] || 0;
-        if (sentences.length <= prev) continue; // nada nuevo
-        const done = sentences.slice(0, prev).join(" ");
-        const todo = sentences.slice(prev).join(" ");
-        try {
-          const translated = await translateBatch(todo, sourceLang, lang);
-          if (cancelled) return;
-          const merged = ((translations[lang] ? translations[lang] + " " : "") + translated).trim();
-          setTranslations((p) => ({ ...p, [lang]: merged }));
-          lastTranslatedCount.current[lang] = sentences.length;
-          wsRef.current?.readyState === 1 &&
-            wsRef.current.send(JSON.stringify({ type: "translation", lang, text: merged, isFinal: true }));
-        } catch {
-          // los reintentos ocurriran en el siguiente tick de voz
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [speech.sentences.join("|"), langs, listening]);
-
-  // Broadcast al proyector
-  useEffect(() => {
-    if (bcRef.current && fullText) {
-      bcRef.current.postMessage({ type: "subtitle", text: fullText });
-    }
-  }, [fullText]);
-
-  // Difundir tambien el texto original por WebSocket
-  useEffect(() => {
-    if (wsRef.current?.readyState === 1 && fullText) {
+    if (!fullText) return;
+    if (wsRef.current?.readyState === 1) {
       wsRef.current.send(JSON.stringify({ type: "speech", text: fullText, isFinal: !speech.interim }));
     }
+    bcRef.current?.postMessage({ type: "subtitle", text: fullText });
   }, [fullText]);
+
+  // Difusion de cada traduccion en cuanto este lista
+  useEffect(() => {
+    if (!eventCode) return;
+    for (const [lang, text] of Object.entries(translations)) {
+      if (!text) continue;
+      if (wsRef.current?.readyState === 1) {
+        wsRef.current.send(JSON.stringify({ type: "translation", lang, text, isFinal: true }));
+      }
+    }
+  }, [translations]);
 
   async function endEvent() {
     speech.stop();
@@ -153,7 +126,7 @@ export default function Speaker() {
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => window.open(`/projector.html?event=${eventCode}`, "_blank")}
+                  onClick={() => window.open(`/projector?event=${eventCode}`, "_blank")}
                 >
                   🖥️ Abrir vista proyector
                 </Button>
@@ -168,7 +141,7 @@ export default function Speaker() {
               </CardContent>
             </Card>
 
-            {[...langs].map((lang) => {
+            {langs.map((lang) => {
               const label = LANGS.find((l) => l.value === lang)?.label || lang;
               return (
                 <Card key={lang}>

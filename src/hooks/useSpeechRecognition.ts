@@ -20,6 +20,9 @@ export function useSpeechRecognition(langSpeech: string, active: boolean) {
       setError("Este navegador no soporta reconocimiento de voz (Web Speech API). Usa Chrome o Edge.");
       return;
     }
+    let stopped = false;
+    let restartTimer: ReturnType<typeof setTimeout> | undefined;
+
     const recog = new SR();
     recogRef.current = recog;
     recog.continuous = true;
@@ -40,11 +43,30 @@ export function useSpeechRecognition(langSpeech: string, active: boolean) {
         sentences: splitSentences(full),
       });
     };
-    recog.onerror = (e: any) => setError(e.error);
+    recog.onerror = (e: any) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        stopped = true;
+        setError("Permiso de micrófono denegado.");
+      }
+    };
+    // Chrome detiene la escucha tras silencio: reinicio automatico mientras siga activo
+    recog.onend = () => {
+      if (stopped) return;
+      restartTimer = setTimeout(() => {
+        if (stopped) return;
+        try {
+          recog.start();
+        } catch {}
+      }, 250);
+    };
+
     try {
       recog.start();
     } catch {}
+
     return () => {
+      stopped = true;
+      if (restartTimer) clearTimeout(restartTimer);
       try {
         recog.stop();
       } catch {}

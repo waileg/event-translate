@@ -58,37 +58,30 @@ async function translateServer(text: string, from: string, to: string): Promise<
 }
 
 /**
- * Traduce por tandas de frases completas.
- * Solo traduce las frases nuevas; las ya traducidas salen de la cache.
+ * Traduce UNA frase completa. Usa la cache; si no esta, usa la
+ * Translator API local y si no, el servidor (MyMemory).
  */
-export async function translateBatch(
-  fullText: string,
+export async function translateSentence(
+  sentence: string,
   from: string,
   to: string,
 ): Promise<string> {
-  const sentences = splitSentences(fullText);
-  const out: string[] = [];
-  for (const s of sentences) {
-    const cacheKey = `${from}>${to}:${s}`;
-    if (translationCache.has(cacheKey)) {
-      out.push(translationCache.get(cacheKey)!);
-      continue;
+  const cacheKey = `${from}>${to}:${sentence}`;
+  if (translationCache.has(cacheKey)) return translationCache.get(cacheKey)!;
+
+  let translated: string | null = null;
+  const tr = await getTranslator(from, to);
+  if (tr) {
+    try {
+      translated = await tr.translate(sentence);
+    } catch {
+      translators.set(`${from}>${to}`, null);
+      translated = null;
     }
-    let translated: string | null = null;
-    const tr = await getTranslator(from, to);
-    if (tr) {
-      try {
-        translated = await tr.translate(s);
-      } catch {
-        translators.set(`${from}>${to}`, null);
-        translated = null;
-      }
-    }
-    if (translated === null) {
-      translated = await translateServer(s, from, to);
-    }
-    translationCache.set(cacheKey, translated);
-    out.push(translated);
   }
-  return out.join(" ");
+  if (translated === null) {
+    translated = await translateServer(sentence, from, to);
+  }
+  translationCache.set(cacheKey, translated);
+  return translated;
 }
