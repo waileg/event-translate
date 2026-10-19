@@ -9,15 +9,15 @@ Traducción simultánea de eventos vía código QR. El orador habla; los asisten
 3. Los asistentes escanean el QR → se abre `/e/<CÓDIGO>` en su móvil.
 4. El orador pulsa **Iniciar transcripción**: la Web Speech API transcribe su voz en directo.
 5. **La traducción la hace el ordenador principal (orador)**, en tandas de frases completas (solo las frases nuevas se traducen; las ya hechas salen de la caché):
-   - Motor principal: **Translator API de Chrome** (local, gratuita, on-device, requiere Chrome 138+)
-   - Fallback: MyMemory vía servidor (navegadores sin Translator API)
+   - Motor único: **Translator API de Chrome** (local, gratuita, on-device, requiere Chrome 138+). **Sin APIs externas de traducción**
+   - Sin fallback: si el navegador del orador no soporta la API, la app avisa (se requiere Chrome/Edge 138+)
 6. El texto traducido se difunde por WebSocket a los asistentes de cada idioma. Vista **proyector** (`/projector`) con subtítulos gigantes vía BroadcastChannel (últimas 3 líneas).
 
 ## Stack
 
 - **Frontend**: React 19 + TypeScript + Tailwind CSS v4 + Vite, componentes estilo 000h by Cojeev (`src/components/ui`)
 - **Backend**: Express + WebSocket (`ws`), generación de QR (`qrcode`)
-- **APIs**: Web Speech API (transcripción), Translator API de Chrome (traducción local) con fallback a MyMemory
+- **APIs**: Web Speech API (transcripción), Translator API de Chrome (traducción local, sin servicios externos), SpeechSynthesis (lectura en voz alta en el móvil del asistente)
 
 ## Desarrollo
 

@@ -89,27 +89,8 @@ app.get("*", (req, res, next) => {
   next();
 });
 
-// ---------- Traduccion (MyMemory, gratuito, con cache) ----------
-const translationCache = new Map();
-
-app.post("/api/translate", async (req, res) => {
-  const { text, from, to } = req.body || {};
-  if (!text || !to || !from) return res.status(400).json({ error: "Faltan parametros" });
-  const key = `${from}>${to}:${text}`;
-  if (translationCache.has(key)) return res.json({ text: translationCache.get(key) });
-
-  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`;
-  try {
-    const r = await fetch(url);
-    const data = await r.json();
-    const translated = data?.responseData?.translatedText;
-    if (!translated) throw new Error("Respuesta invalida");
-    translationCache.set(key, translated);
-    res.json({ text: translated });
-  } catch {
-    res.status(502).json({ error: "Servicio de traduccion no disponible" });
-  }
-});
+// La traduccion se hace integramente en el navegador del orador
+// (Translator API de Chrome, on-device). No hay endpoint de traduccion.
 
 // ---------- WebSockets ----------
 const server = http.createServer(app);

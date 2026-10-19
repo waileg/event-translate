@@ -47,19 +47,10 @@ async function getTranslator(from: string, to: string): Promise<Translator | nul
   }
 }
 
-async function translateServer(text: string, from: string, to: string): Promise<string> {
-  const r = await fetch("/api/translate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, from, to }),
-  });
-  if (!r.ok) throw new Error("translation service unavailable");
-  return (await r.json()).text;
-}
-
 /**
- * Traduce UNA frase completa. Usa la cache; si no esta, usa la
- * Translator API local y si no, el servidor (MyMemory).
+ * Traduce UNA frase completa usando SOLO la Translator API local del navegador
+ * (on-device, gratuita, sin llamadas a ningun servicio externo).
+ * Lanza error si el navegador no la soporta o el par de idiomas no esta disponible.
  */
 export async function translateSentence(
   sentence: string,
@@ -69,19 +60,11 @@ export async function translateSentence(
   const cacheKey = `${from}>${to}:${sentence}`;
   if (translationCache.has(cacheKey)) return translationCache.get(cacheKey)!;
 
-  let translated: string | null = null;
   const tr = await getTranslator(from, to);
-  if (tr) {
-    try {
-      translated = await tr.translate(sentence);
-    } catch {
-      translators.set(`${from}>${to}`, null);
-      translated = null;
-    }
+  if (!tr) {
+    throw new Error("no-local-translator");
   }
-  if (translated === null) {
-    translated = await translateServer(sentence, from, to);
-  }
+  const translated = await tr.translate(sentence);
   translationCache.set(cacheKey, translated);
   return translated;
 }

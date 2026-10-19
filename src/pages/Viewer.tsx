@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { LANGS } from "@/lib/translate";
+import { enableSpeech, disableSpeech, speakSentence, setSpeechRate } from "@/lib/speak";
 
 export default function Viewer({ code }: { code: string }) {
   const [lang, setLang] = useState<string>(() => localStorage.getItem("et_lang") || "en");
@@ -10,6 +12,8 @@ export default function Viewer({ code }: { code: string }) {
   const [original, setOriginal] = useState("");
   const [status, setStatus] = useState("Conectando…");
   const [ended, setEnded] = useState(false);
+  const [speechOn, setSpeechOn] = useState(false);
+  const [rate, setRate] = useState(() => Number(localStorage.getItem("et_rate")) || 1);
   const wsRef = useRef<WebSocket | null>(null);
   const langRef = useRef(lang);
   langRef.current = lang;
@@ -42,6 +46,7 @@ export default function Viewer({ code }: { code: string }) {
         }
         if (msg.type === "translation" && msg.lang === langRef.current) {
           setTranslated(msg.text);
+          speakSentence(msg.text, langRef.current);
         } else if (msg.type === "speech") {
           setOriginal(msg.text);
         }
@@ -50,6 +55,22 @@ export default function Viewer({ code }: { code: string }) {
     connect();
     return () => { closed = true; clearTimeout(retry); ws?.close(); };
   }, [code]);
+
+  function toggleSpeech() {
+    if (speechOn) {
+      disableSpeech();
+      setSpeechOn(false);
+    } else {
+      enableSpeech();
+      setSpeechOn(true);
+    }
+  }
+
+  function changeRate(value: number) {
+    setRate(value);
+    setSpeechRate(value);
+    localStorage.setItem("et_rate", String(value));
+  }
 
   function changeLang(value: string) {
     setLang(value);
@@ -78,6 +99,26 @@ export default function Viewer({ code }: { code: string }) {
         <Card>
           <CardHeader><CardTitle className="text-sm font-medium text-slate-400">Traducción en vivo</CardTitle></CardHeader>
           <CardContent className="text-2xl leading-snug min-h-16">{translated}</CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-3 pt-6">
+            <Button variant={speechOn ? "destructive" : "default"} onClick={toggleSpeech}>
+              {speechOn ? "🔇 Detener voz" : "🔊 Leer en voz alta"}
+            </Button>
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <span>Velocidad</span>
+              {[1, 1.25, 1.5].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => changeRate(r)}
+                  className={`px-2 py-1 rounded ${rate === r ? "bg-sky-500 text-slate-950 font-semibold" : "bg-slate-800 text-slate-300"}`}
+                >
+                  {r}x
+                </button>
+              ))}
+            </div>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle className="text-sm font-medium text-slate-400">Texto original</CardTitle></CardHeader>
