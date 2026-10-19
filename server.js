@@ -10,7 +10,15 @@ const PORT = process.env.PORT || 3000;
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+
+const dist = path.join(__dirname, "dist");
+const legacyPublic = path.join(__dirname, "public");
+const hasDist = (await import("node:fs")).existsSync(dist);
+if (hasDist) {
+  app.use(express.static(dist));
+} else {
+  app.use(express.static(legacyPublic));
+}
 
 // ---------- Estado en memoria ----------
 const events = new Map(); // code -> { code, createdAt, sourceLang }
@@ -60,9 +68,25 @@ app.get("/api/events/:code/qr", async (req, res) => {
 // Vista del asistente
 app.get("/e/:code", (req, res) => {
   if (!events.has(req.params.code)) {
+    if (hasDist) {
+      return res.status(404).send("<!doctype html><html lang=es><body style='font-family:system-ui;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh'><div style=text-align:center><h1>Evento no encontrado</h1><p>El QR ha caducado o el evento ha finalizado.</p></div></body></html>");
+    }
     return res.status(404).sendFile(path.join(__dirname, "public", "notfound.html"));
   }
+  if (hasDist) return res.sendFile(path.join(dist, "index.html"));
   res.sendFile(path.join(__dirname, "public", "viewer.html"));
+});
+
+app.get("/projector", (req, res) => {
+  if (hasDist) return res.sendFile(path.join(dist, "index.html"));
+  res.redirect("/projector.html");
+});
+
+app.get("*", (req, res, next) => {
+  if (hasDist && !req.path.startsWith("/api")) {
+    return res.sendFile(path.join(dist, "index.html"));
+  }
+  next();
 });
 
 // ---------- Traduccion (MyMemory, gratuito, con cache) ----------
