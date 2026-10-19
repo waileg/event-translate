@@ -65,8 +65,6 @@ $("lang").addEventListener("change", () => {
 const evtSource = document.createElement("script");
 let ws;
 let lastText = null;
-let lastFinal = null;
-let translateTimer = null;
 
 function connect() {
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/?event=${code}`);
@@ -74,16 +72,12 @@ function connect() {
   ws.onopen = () => {
     $("dot").classList.add("on");
     $("statusText").textContent = "Conectado";
+    ws.send(JSON.stringify({ type: "lang", lang: $("lang").value }));
   };
   ws.onclose = () => {
     $("dot").classList.remove("on");
     $("statusText").textContent = "Reconectando…";
     setTimeout(connect, 2000);
-  };
-  ws.onopen = () => {
-    $("dot").classList.add("on");
-    $("statusText").textContent = "Conectado";
-    ws.send(JSON.stringify({ type: "lang", lang: $("lang").value }));
   };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
@@ -96,8 +90,7 @@ function connect() {
       $("original").textContent = msg.text;
     }
   };
-
-// La traducción la realiza el ordenador principal (orador) y llega ya traducida por WebSocket.
+}
 
 fetch(`/api/events/${code}`).then(r => r.ok ? r.json() : null).then(ev => {
   if (ev?.sourceLang) sessionStorage.setItem("et_src", ev.sourceLang);

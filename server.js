@@ -42,7 +42,12 @@ app.get("/api/events/:code", (req, res) => {
 app.get("/api/events/:code/qr", async (req, res) => {
   const ev = events.get(req.params.code);
   if (!ev) return res.status(404).json({ error: "Evento no encontrado" });
-  const base = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
+  let base = process.env.PUBLIC_BASE_URL;
+  if (!base) {
+    const proto = req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+    const host = req.headers.host || `localhost:${PORT}`;
+    base = `${proto}://${host}`;
+  }
   const url = `${base}/e/${ev.code}`;
   try {
     const png = await QRCode.toBuffer(url, { width: 400, margin: 2 });
