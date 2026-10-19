@@ -13,6 +13,7 @@
   #subtitle { font-size:4.5vw; line-height:1.35; text-align:center; max-width:90vw; text-shadow:0 2px 8px #000; }
   #subtitle p { margin:.2em 0; transition:opacity 1.2s ease; }
   #subtitle p.old { opacity:.55; }
+  #subtitle p.oldest { opacity:.35; }
   #subtitle .empty { color:#334155; }
 </style>
 </head>
@@ -24,41 +25,29 @@ const MAX_LINES = 3;
 const code = new URLSearchParams(location.search).get("event") || location.hash.slice(1);
 document.getElementById("code").textContent = code ? "Evento " + code : "";
 
-let lines = [];        // frases finales mostradas
-let current = "";     // frase en curso (interim)
-let lastFinal = "";    // ultimo texto final recibido (para no duplicar)
-
 const channel = new BroadcastChannel("event-translate-" + (code || "default"));
 channel.onmessage = (e) => {
   const msg = e.data;
   if (msg.type !== "subtitle") return;
   const text = (msg.text || "").trim();
   if (!text) return;
-
-  if (text === lastFinal) { current = ""; render(); return; } // frase final ya vista como interim
-  if (text.startsWith(lines.join(" ").slice(0, 20)) && lines.length && text === lines[lines.length - 1]) return;
-
-  // si el texto nuevo empieza con lo acumulado, es la frase en curso creciendo
-  current = text;
-  const accumulated = lines.join(" ");
-  if (accumulated && current.startsWith(accumulated)) current = current.slice(accumulated.length).trim();
-  if (!current) { render(); return; }
-
-  // deteccion de frase final: termina en puntuacion de cierre o baja de longitud
-  if (/[.!?…]\s*$/.test(current)) {
-    lines.push(current);
-    lastFinal = text;
-    current = "";
-    if (lines.length > MAX_LINES) lines = lines.slice(-MAX_LINES);
-  }
-  render();
+  render(text);
 };
 
-function render() {
+function splitSentences(text) {
+  // divide en frases conservando la puntuacion; la ultima puede estar incompleta
+  const parts = text.split(/(?<=[.!?…])\s+/).filter(Boolean);
+  return parts;
+}
+
+function render(fullText) {
+  const sentences = splitSentences(fullText);
+  const visible = sentences.slice(-MAX_LINES);
   const el = document.getElementById("subtitle");
-  const parts = lines.map((l, i) => `<p class="${i < lines.length - 1 ? "old" : ""}">${escapeHtml(l)}</p>`);
-  if (current) parts.push(`<p class="old">${escapeHtml(current)}</p>`);
-  el.innerHTML = parts.length ? parts.join("") : '<span class="empty">Esperando al orador…</span>';
+  el.innerHTML = visible.map((s, i) => {
+    const cls = i === visible.length - 1 ? "" : (i === 0 && visible.length === MAX_LINES ? "oldest" : "old");
+    return `<p class="${cls}">${escapeHtml(s)}</p>`;
+  }).join("");
 }
 
 function escapeHtml(s) {

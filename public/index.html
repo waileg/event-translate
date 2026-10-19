@@ -118,10 +118,12 @@ async function getTranslator(lang) {
   const t = window.__translators.get(lang);
   if (t !== undefined) return t;
   let tr = null;
-  if ("translation" in window && "Translator" in window) {
+  if ("Translator" in window && Translator.availability) {
     try {
-      const status = await window.translation.canTranslate({ sourceLanguage: $("lang").value, targetLanguage: lang });
-      if (status === "readable") tr = await Translator.create({ sourceLanguage: $("lang").value, targetLanguage: lang });
+      const status = await Translator.availability({ sourceLanguage: $("lang").value, targetLanguage: lang });
+      if (status === "available" || status === "downloadable" || status === "downloading") {
+        tr = await Translator.create({ sourceLanguage: $("lang").value, targetLanguage: lang });
+      }
     } catch {}
   }
   window.__translators.set(lang, tr);
