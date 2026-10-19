@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event Translate - Proyector</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,sans-serif; background:#000; color:#fff; min-height:100vh; display:flex; flex-direction:column; }
+  header { padding:10px 16px; font-size:.85rem; color:#64748b; display:flex; justify-content:space-between; }
+  header b { color:#38bdf8; }
+  main { flex:1; display:flex; align-items:flex-end; justify-content:center; padding:4vw; }
+  #subtitle { font-size:4.5vw; line-height:1.35; text-align:center; max-width:90vw; text-shadow:0 2px 8px #000; }
+  #subtitle .empty { color:#334155; }
+</style>
+</head>
+<body>
+<header><span>Event Translate — <b>Proyector</b></span><span id="code"></span></header>
+<main><div id="subtitle"><span class="empty">Esperando al orador…</span></div></main>
+<script>
+const code = new URLSearchParams(location.search).get("event") || location.hash.slice(1);
+document.getElementById("code").textContent = code ? "Evento " + code : "";
+const channel = new BroadcastChannel("event-translate-" + (code || "default"));
+channel.onmessage = (e) => {
+  const msg = e.data;
+  if (msg.type !== "subtitle") return;
+  const el = document.getElementById("subtitle");
+  el.innerHTML = "";
+  el.appendChild(document.createTextNode(msg.text || ""));
+  if (!msg.text) el.innerHTML = '<span class="empty">Esperando al orador…</span>';
+};
+</script>
+</body>
+</html>

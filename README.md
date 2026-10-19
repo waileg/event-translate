@@ -23,13 +23,20 @@ PUBLIC_BASE_URL=https://tu-dominio.com npm start  # URL dentro del QR en producc
 
 - `server.js` — Express + WebSocket (`ws`). API de eventos, generación de QR (`qrcode`), endpoint de traducción y difusión por salas.
 - `public/index.html` — Consola del orador: crea evento, muestra QR, captura voz con Web Speech API y envía el texto por WebSocket.
-- `public/viewer.html` — Vista del asistente: recibe el texto, traduce (MyMemory API, gratuita, con caché) y muestra la traducción en vivo.
+- `public/viewer.html` — Vista del asistente: recibe el texto, traduce y muestra la traducción en vivo. Usa la **Translator API** de Chrome (local, instantánea) cuando está disponible y hace *fallback* automático a MyMemory (servidor) en el resto de navegadores.
+- `public/projector.html` — Vista proyector: subtítulos gigantes en otra pestaña/monitor del mismo PC vía **BroadcastChannel**.
 - `public/notfound.html` — QR caducado o evento inexistente.
 
 ## APIs utilizadas
 
 - **Speech-to-text**: Web Speech API del navegador (gratuita, requiere Chrome/Edge y permiso de micrófono; en producción se puede sustituir por Whisper/Deepgram en el servidor).
 - **Traducción**: [MyMemory](https://mymemory.translated.net) (gratuita, sin API key, con límite de uso diario por IP). Sustituible por DeepL/Google Translate cambiando el endpoint `/api/translate` en `server.js`.
+
+## APIs web utilizadas
+
+- **Web Speech API** (Chrome/Edge): transcripción de voz del orador en directo.
+- **Translator API** (Chrome 138+): traducción local en el dispositivo del asistente, sin llamadas al servidor. Fallback a MyMemory si el navegador no la soporta.
+- **BroadcastChannel**: difusión de subtítulos a pestañas del mismo navegador (vista proyector). La difusión a los móviles se hace por WebSocket.
 
 ## Notas
 

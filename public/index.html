@@ -58,6 +58,10 @@
       <a class="qrlink" id="qrUrl" target="_blank"></a>
     </div>
     <div class="card">
+      <label>Proyector de subtítulos (otra pestaña/monitor de este PC)</label>
+      <button id="projectorBtn">🖥️ Abrir vista proyector</button>
+    </div>
+    <div class="card">
       <label>Transcripción en vivo</label>
       <div id="live"></div>
     </div>
@@ -90,6 +94,7 @@ async function createEvent() {
 function startWebSocket() {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/?event=${eventCode}`);
   window.__ws = ws;
+  window.__bc = new BroadcastChannel("event-translate-" + eventCode);
 }
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -135,11 +140,18 @@ $("startBtn").addEventListener("click", () => {
       window.__ws.send(JSON.stringify({ type:"speech", text: (baseText + interim).trim(), isFinal: false }));
       if (interim === "") window.__ws.send(JSON.stringify({ type:"speech", text: baseText.trim(), isFinal: true }));
     }
+    if (window.__bc) {
+      window.__bc.postMessage({ type:"subtitle", text: (baseText + interim).trim() });
+    }
   };
   recog.start();
 });
 
 $("endBtn").addEventListener("click", () => location.reload());
+
+$("projectorBtn").addEventListener("click", () => {
+  window.open(`/projector.html?event=${eventCode}`, "_blank");
+});
 
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));

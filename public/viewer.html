@@ -92,19 +92,57 @@ function connect() {
   };
 }
 
+// ---- Translator API (Chrome) con fallback a MyMemory ----
+let translator = null;
+let translatorLang = null;
+let translationReady = null;
+
+async function getTranslator(target) {
+  if (!("Translator" in window)) return null;
+  if (translator && translatorLang === target) return translator;
+  try {
+    if (!("translation" in window) || !window.translation.canTranslate) {
+      return null;
+    }
+    const status = await window.translation.canTranslate({ sourceLanguage: detectSource(), targetLanguage: target });
+    if (status !== "readable") return null;
+    translator = await Translator.create({ sourceLanguage: detectSource(), targetLanguage: target });
+    translatorLang = target;
+    return translator;
+  } catch {
+    return null;
+  }
+}
+
+async function translateWithApi(text, target) {
+  const t = await getTranslator(target);
+  if (!t) return null;
+  try {
+    return await t.translate(text);
+  } catch {
+    translator = null;
+    return null;
+  }
+}
+
+async function translateWithServer(text, target) {
+  const r = await fetch("/api/translate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, from: detectSource(), to: target })
+  });
+  if (!r.ok) throw new Error();
+  const data = await r.json();
+  return data.text;
+}
+
 async function translate(text) {
   if (!text) return;
-  const from = new URLSearchParams({ code }).toString(); // no-op, source lang via cache miss is fine
   const target = $("lang").value;
   try {
-    const r = await fetch("/api/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, from: detectSource(), to: target })
-    });
-    if (!r.ok) throw new Error();
-    const data = await r.json();
-    $("translated").textContent = data.text;
+    const viaApi = await translateWithApi(text, target);
+    const result = viaApi !== null ? viaApi : await translateWithServer(text, target);
+    $("translated").textContent = result;
     $("translated").classList.add("pulse");
     setTimeout(() => $("translated").classList.remove("pulse"), 600);
   } catch {
