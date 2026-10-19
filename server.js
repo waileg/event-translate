@@ -15,6 +15,7 @@ app.use(express.static(path.join(__dirname, "public")));
 // ---------- Estado en memoria ----------
 const events = new Map(); // code -> { code, createdAt, sourceLang }
 const rooms = new Map();  // code -> Set<ws>
+const roomLangs = new Map(); // code -> Set<lang> (idiomas que piden los asistentes)
 
 function makeCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -28,6 +29,7 @@ app.post("/api/events", (req, res) => {
   const code = makeCode();
   events.set(code, { code, createdAt: Date.now(), sourceLang: req.body?.sourceLang || "es" });
   rooms.set(code, new Set());
+  roomLangs.set(code, new Set());
   res.json({ code });
 });
 
@@ -96,8 +98,22 @@ wss.on("connection", (ws, req) => {
   ws.on("message", (raw) => {
     let msg;
     try { msg = JSON.parse(raw.toString()); } catch { return; }
-    if (msg.type !== "speech") return;
-    const payload = JSON.stringify({ type: "speech", text: msg.text, isFinal: !!msg.isFinal });
+
+    if (msg.type === "lang") {
+      // El asistente pide un idioma: registrar y avisar al orador
+      const langs = roomLangs.get(code);
+      if (langs && msg.lang && !langs.has(msg.lang)) {
+        langs.add(msg.lang);
+        const payload = JSON.stringify({ type: "lang", lang: msg.lang });
+        for (const client of rooms.get(code)) {
+          if (client.readyState === 1) client.send(payload);
+        }
+      }
+      return;
+    }
+
+    if (msg.type !== "speech" && msg.type !== "translation") return;
+    const payload = JSON.stringify({ type: msg.type, lang: msg.lang, text: msg.text, isFinal: !!msg.isFinal });
     for (const client of rooms.get(code)) {
       if (client !== ws && client.readyState === 1) client.send(payload);
     }
@@ -117,6 +133,7 @@ setInterval(() => {
       events.delete(code);
       rooms.get(code)?.forEach((ws) => ws.close());
       rooms.delete(code);
+      roomLangs.delete(code);
     }
   }
 }, 60 * 60 * 1000);

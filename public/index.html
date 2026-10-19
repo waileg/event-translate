@@ -65,6 +65,7 @@
       <label>Transcripción en vivo</label>
       <div id="live"></div>
     </div>
+    <div id="langs"></div>
     <button class="danger" id="endBtn">Finalizar evento</button>
   </div>
 </div>
@@ -95,6 +96,75 @@ function startWebSocket() {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/?event=${eventCode}`);
   window.__ws = ws;
   window.__bc = new BroadcastChannel("event-translate-" + eventCode);
+  window.__translators = new Map(); // lang -> Translator
+  window.__langs = new Set();      // idiomas pedidos por los asistentes
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "lang") addLang(msg.lang);
+  };
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+// ---- Traduccion en el ordenador principal ----
+const TARGETS = {
+  en: "Traducción (English)", es: "Traducción (Español)", fr: "Traducción (Français)",
+  de: "Traducción (Deutsch)", it: "Traducción (Italiano)", pt: "Traducción (Português)"
+};
+
+async function getTranslator(lang) {
+  const t = window.__translators.get(lang);
+  if (t !== undefined) return t;
+  let tr = null;
+  if ("translation" in window && "Translator" in window) {
+    try {
+      const status = await window.translation.canTranslate({ sourceLanguage: $("lang").value, targetLanguage: lang });
+      if (status === "readable") tr = await Translator.create({ sourceLanguage: $("lang").value, targetLanguage: lang });
+    } catch {}
+  }
+  window.__translators.set(lang, tr);
+  return tr;
+}
+
+async function translateText(text, lang) {
+  const tr = await getTranslator(lang);
+  if (tr) {
+    try { return await tr.translate(text); } catch { window.__translators.set(lang, null); }
+  }
+  const r = await fetch("/api/translate", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, from: $("lang").value, to: lang })
+  });
+  if (!r.ok) throw new Error();
+  return (await r.json()).text;
+}
+
+function addLang(lang) {
+  if (!window.__langs) return;
+  if (window.__langs.has(lang)) return;
+  window.__langs.add(lang);
+  const div = document.createElement("div");
+  div.className = "card";
+  div.innerHTML = `<label>${escapeHtml(TARGETS[lang] || lang)}</label><div class="lang-live" id="live-${lang}">…</div>`;
+  $("langs").appendChild(div);
+}
+
+async function broadcastTranslations(finalText, interimText) {
+  for (const lang of window.__langs || []) {
+    try {
+      const src = interimText || finalText;
+      if (!src) continue;
+      const out = await translateText(src, lang);
+      if (!out) continue;
+      const el = $("live-" + lang);
+      if (el) el.textContent = out;
+      if (window.__ws?.readyState === 1) {
+        window.__ws.send(JSON.stringify({ type: "translation", lang, text: out, isFinal: !!finalText && !interimText }));
+      }
+    } catch {}
+  }
 }
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -143,6 +213,7 @@ $("startBtn").addEventListener("click", () => {
     if (window.__bc) {
       window.__bc.postMessage({ type:"subtitle", text: (baseText + interim).trim() });
     }
+    broadcastTranslations(baseText.trim(), interim.trim());
   };
   recog.start();
 });
@@ -153,9 +224,7 @@ $("projectorBtn").addEventListener("click", () => {
   window.open(`/projector.html?event=${eventCode}`, "_blank");
 });
 
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-}
+
 </script>
 </body>
 </html>

@@ -8,7 +8,7 @@ Traducción simultánea de eventos vía código QR. El orador habla; los asisten
 2. Se genera un código de evento (ej. `MDHS5J`) y su código QR.
 3. Los asistentes escanean el QR → se abre `/e/<CÓDIGO>` en su móvil.
 4. El orador pulsa **Iniciar transcripción**: el navegador (Web Speech API) transcribe su voz en directo.
-5. El texto viaja por WebSocket a todos los asistentes conectados, y cada uno lo ve traducido a su idioma elegido.
+5. **La traducción la hace el ordenador principal (orador)**: cuando un asistente elige idioma, se le notifica vía WebSocket y la consola traduce una vez por idioma (Translator API de Chrome, con fallback a MyMemory), emitiendo el texto ya traducido a todos los asistentes de ese idioma.
 
 ## Ejecutar
 
@@ -23,7 +23,7 @@ PUBLIC_BASE_URL=https://tu-dominio.com npm start  # URL dentro del QR en producc
 
 - `server.js` — Express + WebSocket (`ws`). API de eventos, generación de QR (`qrcode`), endpoint de traducción y difusión por salas.
 - `public/index.html` — Consola del orador: crea evento, muestra QR, captura voz con Web Speech API y envía el texto por WebSocket.
-- `public/viewer.html` — Vista del asistente: recibe el texto, traduce y muestra la traducción en vivo. Usa la **Translator API** de Chrome (local, instantánea) cuando está disponible y hace *fallback* automático a MyMemory (servidor) en el resto de navegadores.
+- `public/viewer.html` — Vista del asistente: elige idioma y recibe la traducción ya hecha por WebSocket. No traduce nada en el dispositivo.
 - `public/projector.html` — Vista proyector: subtítulos gigantes en otra pestaña/monitor del mismo PC vía **BroadcastChannel**.
 - `public/notfound.html` — QR caducado o evento inexistente.
 
@@ -35,7 +35,7 @@ PUBLIC_BASE_URL=https://tu-dominio.com npm start  # URL dentro del QR en producc
 ## APIs web utilizadas
 
 - **Web Speech API** (Chrome/Edge): transcripción de voz del orador en directo.
-- **Translator API** (Chrome 138+): traducción local en el dispositivo del asistente, sin llamadas al servidor. Fallback a MyMemory si el navegador no la soporta.
+- **Translator API** (Chrome 138+): traducción local en el **ordenador del orador**, una vez por idioma destino, sin llamadas desde los móviles. Fallback a MyMemory si el navegador no la soporta.
 - **BroadcastChannel**: difusión de subtítulos a pestañas del mismo navegador (vista proyector). La difusión a los móviles se hace por WebSocket.
 
 ## Notas
