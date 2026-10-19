@@ -117,6 +117,21 @@ wss.on("connection", (ws, req) => {
       return;
     }
 
+    if (msg.type === "end") {
+      const payload = JSON.stringify({ type: "end" });
+      for (const client of rooms.get(code) || []) {
+        if (client.readyState === 1) client.send(payload);
+      }
+      setTimeout(() => {
+        rooms.get(code)?.forEach((client) => client.close());
+        events.delete(code);
+        rooms.delete(code);
+        roomLangs.delete(code);
+        console.log(`[event] ${code} finalizado`);
+      }, 500);
+      return;
+    }
+
     if (msg.type !== "speech" && msg.type !== "translation") return;
     const payload = JSON.stringify({ type: msg.type, lang: msg.lang, text: msg.text, isFinal: !!msg.isFinal });
     for (const client of rooms.get(code)) {

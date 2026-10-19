@@ -66,6 +66,8 @@ const evtSource = document.createElement("script");
 let ws;
 let lastText = null;
 
+let ended = false;
+
 function connect() {
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/?event=${code}`);
 
@@ -76,11 +78,19 @@ function connect() {
   };
   ws.onclose = () => {
     $("dot").classList.remove("on");
+    if (ended) return;
     $("statusText").textContent = "Reconectando…";
     setTimeout(connect, 2000);
   };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
+    if (msg.type === "end") {
+      ended = true;
+      $("statusText").textContent = "Evento finalizado";
+      $("translated").textContent = "El orador ha finalizado el evento. ¡Gracias por asistir!";
+      $("original").textContent = "";
+      return;
+    }
     if (msg.type === "translation" && msg.lang === $("lang").value) {
       $("translated").textContent = msg.text;
       $("translated").classList.add("pulse");

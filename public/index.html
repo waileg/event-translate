@@ -220,7 +220,15 @@ $("startBtn").addEventListener("click", () => {
   recog.start();
 });
 
-$("endBtn").addEventListener("click", () => location.reload());
+$("endBtn").addEventListener("click", () => {
+  try { recog?.stop(); } catch {}
+  if (window.__ws?.readyState === 1) {
+    window.__ws.send(JSON.stringify({ type: "end" }));
+    setTimeout(() => location.reload(), 700);
+  } else {
+    location.reload();
+  }
+});
 
 $("projectorBtn").addEventListener("click", () => {
   window.open(`/projector.html?event=${eventCode}`, "_blank");
